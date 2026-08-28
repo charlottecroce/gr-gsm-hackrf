@@ -1,3 +1,7 @@
+from this fork:
+
+git clone -b maint-3.10 https://github.com/bkerler/gr-gsm.git
+
 ```
 sudo apt-get update && \
 sudo apt-get install -y \
