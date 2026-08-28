@@ -199,7 +199,7 @@ class wideband_receiver(gr.hier_block2):
 
 
 class wideband_scanner(gr.top_block):
-    def __init__(self, rec_len=3, sample_rate=2e6, carrier_frequency=939e6, gain=24, ppm=0, args=""):
+    def __init__(self, rec_len=3, sample_rate=2e6, carrier_frequency=939e6, lna_gain=16, vga_gain=20, amp_enable=False, ppm=0, args=""):
         gr.top_block.__init__(self, "Wideband Scanner")
 
         self.rec_len = rec_len
@@ -209,8 +209,7 @@ class wideband_scanner(gr.top_block):
 
         # if no file name is given process data from rtl_sdr source
         print("Args=", args)
-        self.rtlsdr_source = osmosdr.source(args="numchan=" + str(1) + " " +
-                str(gsm.device.get_default_args(args)))
+        self.rtlsdr_source = osmosdr.source(args="numchan=" + str(1) + " " + args)
         #self.rtlsdr_source.set_min_output_buffer(int(sample_rate*rec_len)) #this line causes segfaults on HackRF
         self.rtlsdr_source.set_sample_rate(sample_rate)
 
@@ -226,11 +225,11 @@ class wideband_scanner(gr.top_block):
 
         self.rtlsdr_source.set_dc_offset_mode(2, 0)
         self.rtlsdr_source.set_iq_balance_mode(0, 0)
-        self.rtlsdr_source.set_gain_mode(True, 0)
+        self.rtlsdr_source.set_gain_mode(False, 0)  # HackRF has no hardware AGC
         self.rtlsdr_source.set_bandwidth(sample_rate, 0)
-        self.rtlsdr_source.set_gain(gain, 0)
-        self.rtlsdr_source.set_if_gain(32, 0)
-        self.rtlsdr_source.set_bb_gain(30, 0)
+        self.rtlsdr_source.set_gain(14 if amp_enable else 0, 0)  # AMP stage: 0 or 14 dB only
+        self.rtlsdr_source.set_if_gain(lna_gain, 0)  # LNA: 0-40 dB, 8 dB steps
+        self.rtlsdr_source.set_bb_gain(vga_gain, 0)  # VGA: 0-62 dB, 2 dB steps
         self.head = blocks.head(gr.sizeof_gr_complex * 1, int(rec_len * sample_rate))
 
         # shift again by -0.1MHz in order to align channel center in 0Hz
@@ -303,7 +302,7 @@ class channel_info(object):
         return "ARFCN: %4u, Freq: %6.1fM, CID: %5u, LAC: %5u, MCC: %3u, MNC: %3u, Pwr: %3i" % (
             self.arfcn, self.freq / 1e6, self.cid, self.lac, self.mcc, self.mnc, self.power)
 
-def do_scan(samp_rate, band, speed, ppm, gain, args, prn = None, debug = False):
+def do_scan(samp_rate, band, speed, ppm, lna_gain, vga_gain, amp_enable, args, prn = None, debug = False):
     signallist = []
     channels_num = int(samp_rate / 0.2e6)
     for arfcn_range in gsm.arfcn.get_arfcn_ranges(band):
@@ -331,7 +330,8 @@ def do_scan(samp_rate, band, speed, ppm, gain, args, prn = None, debug = False):
             scanner = wideband_scanner(rec_len=6 - speed,
                                        sample_rate=samp_rate,
                                        carrier_frequency=current_freq,
-                                       ppm=ppm, gain=gain, args=args)
+                                       ppm=ppm, lna_gain=lna_gain, vga_gain=vga_gain,
+                                       amp_enable=amp_enable, args=args)
 
             # start recording
             scanner.start()
@@ -390,8 +390,13 @@ def argument_parser():
                       help="Set sample rate [default=%default] - allowed values even_number*0.2e6")
     parser.add_option("-p", "--ppm", dest="ppm", type="intx", default=0,
                       help="Set frequency correction in ppm [default=%default]")
-    parser.add_option("-g", "--gain", dest="gain", type="eng_float", default=24.0,
-                      help="Set gain [default=%default]")
+    parser.add_option("-g", "--lna-gain", dest="lna_gain", type="eng_float", default=16.0,
+                      help="HackRF LNA/IF gain, 0-40 dB in 8 dB steps. Safe to adjust freely. [default=%default]")
+    parser.add_option("-v", "--vga-gain", dest="vga_gain", type="eng_float", default=20.0,
+                      help="HackRF VGA/baseband gain, 0-62 dB in 2 dB steps. Safe to adjust freely. [default=%default]")
+    parser.add_option("", "--amp", dest="amp_enable", action="store_true", default=False,
+                      help="Enable HackRF front-end RF amp (+14 dB). OFF by default. "
+                      "CAUTION: drops safe max RX input from +10 dBm to -5 dBm.")
     parser.add_option("", "--args", dest="args", type="string", default="",
                       help="Set device arguments [default=%default]."
                       " Use --list-devices the view the available devices")
@@ -399,7 +404,7 @@ def argument_parser():
                       help="List available SDR devices, use --args to specify hints")
     parser.add_option("--speed", dest="speed", type="intx", default=4,
                       help="Scan speed [default=%default]. Value range 0-5.")
-    parser.add_option("-v", "--verbose", action="store_true",
+    parser.add_option("", "--verbose", action="store_true",
                       help="If set, verbose information output is printed: ccch configuration, cell ARFCN's, neighbour ARFCN's")
     parser.add_option("-d", "--debug", action="store_true",
                       help="Print additional debug messages")
@@ -431,9 +436,13 @@ def main(options = None):
             print(info)
             if options.verbose:
                 print(info.get_verbose_info())
+    if options.amp_enable:
+        print("WARNING: HackRF RF amp enabled. Safe max RX input is now -5 dBm. "
+              "Do not use near a strong transmitter without an inline attenuator.", file=sys.stderr)
     print("")
-    do_scan(options.samp_rate, options.band, options.speed,
-            options.ppm, options.gain, options.args, prn = printfunc, debug = options.debug)
+    do_scan(options.samp_rate, options.band, options.speed, options.ppm,
+            options.lna_gain, options.vga_gain, options.amp_enable, options.args,
+            prn = printfunc, debug = options.debug)
 
 if __name__ == '__main__':
     main()

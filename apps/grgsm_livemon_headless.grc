@@ -138,21 +138,55 @@ blocks:
     coordinate: [584, 8]
     rotation: 0
     state: enabled
-- name: gain
+- name: lna_gain
   id: parameter
   parameters:
     alias: ''
-    comment: ''
+    comment: 'HackRF LNA/IF stage. 0-40 dB, 8 dB steps. Safe to adjust freely.'
     hide: none
-    label: RF Gain
+    label: LNA gain (IF)
     short_id: g
     type: eng_float
-    value: '30'
+    value: '16'
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
     coordinate: [480, 8]
+    rotation: 0
+    state: enabled
+- name: vga_gain
+  id: parameter
+  parameters:
+    alias: ''
+    comment: 'HackRF VGA/baseband stage. 0-62 dB, 2 dB steps. Safe to adjust freely.'
+    hide: none
+    label: VGA gain (BB)
+    short_id: v
+    type: eng_float
+    value: '20'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [480, 80]
+    rotation: 0
+    state: enabled
+- name: amp_enable
+  id: parameter
+  parameters:
+    alias: ''
+    comment: 'HackRF front-end RF amp. 0=off, nonzero=on (+14 dB). CAUTION: enabling drops safe max RX input from +10 dBm to -5 dBm.'
+    hide: none
+    label: RF amp enable (DANGER - see comment)
+    short_id: ''
+    type: eng_float
+    value: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [480, 152]
     rotation: 0
     state: enabled
 - name: gsm_bcch_ccch_sdcch4_demapper_0
@@ -474,8 +508,8 @@ blocks:
     ant7: ''
     ant8: ''
     ant9: ''
-    args: str(gsm.device.get_default_args(args))
-    bb_gain0: '20'
+    args: args
+    bb_gain0: vga_gain
     bb_gain1: '20'
     bb_gain10: '20'
     bb_gain11: '20'
@@ -644,7 +678,7 @@ blocks:
     freq7: 100e6
     freq8: 100e6
     freq9: 100e6
-    gain0: gain
+    gain0: (14 if amp_enable else 0)
     gain1: '10'
     gain10: '10'
     gain11: '10'
@@ -708,7 +742,7 @@ blocks:
     gain_mode7: 'False'
     gain_mode8: 'False'
     gain_mode9: 'False'
-    if_gain0: '20'
+    if_gain0: lna_gain
     if_gain1: '20'
     if_gain10: '20'
     if_gain11: '20'

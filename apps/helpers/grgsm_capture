@@ -37,14 +37,14 @@ import sys
 class gsm_capture(gr.top_block):
     def __init__(self,
                  freq,
-                 gain=30,
+                 lna_gain=16,
+                 vga_gain=20,
+                 amp_enable=False,
                  samp_rate=1e6,
                  rec_length=float('Inf'),
                  freq_corr=0,
                  output_filename=None,
                  bandwidth=0,
-                 bb_gain=20,
-                 if_gain=20,
                  antenna="",
                  device_args=""):
         gr.top_block.__init__(self, "Gr-gsm Capture")
@@ -53,18 +53,17 @@ class gsm_capture(gr.top_block):
         # Setting up RF source
         ##################################################
 
-        self.sdr_source = osmosdr.source(args="numchan=" + str(1) + " " +
-                str(gsm.device.get_default_args(device_args)))
+        self.sdr_source = osmosdr.source(args="numchan=" + str(1) + " " + device_args)
 
         self.sdr_source.set_sample_rate(samp_rate)
         self.sdr_source.set_center_freq(freq, 0)
         self.sdr_source.set_freq_corr(freq_corr, 0)
         self.sdr_source.set_dc_offset_mode(2, 0)
         self.sdr_source.set_iq_balance_mode(2, 0)
-        self.sdr_source.set_gain_mode(True, 0)
-        self.sdr_source.set_gain(gain, 0)
-        self.sdr_source.set_if_gain(if_gain, 0)
-        self.sdr_source.set_bb_gain(bb_gain, 0)
+        self.sdr_source.set_gain_mode(False, 0)  # HackRF has no hardware AGC
+        self.sdr_source.set_gain(14 if amp_enable else 0, 0)  # AMP stage: 0 or 14 dB only
+        self.sdr_source.set_if_gain(lna_gain, 0)  # LNA: 0-40 dB, 8 dB steps
+        self.sdr_source.set_bb_gain(vga_gain, 0)  # VGA: 0-62 dB, 2 dB steps
         self.sdr_source.set_antenna("", 0)
         if bandwidth != 0:
             self.sdr_source.set_bandwidth(bandwidth, 0)
@@ -104,9 +103,20 @@ if __name__ == '__main__':
                       help="Set ARFCN instead of frequency (for PCS1900 add"
                            "0x8000 (2**15) to the ARFCN number)")
 
-    parser.add_option("-g", "--gain", dest="gain", type="eng_float",
-                      default=eng_notation.num_to_str(30),
-                      help="Set gain [default=%default]")
+    parser.add_option("-g", "--lna-gain", dest="lna_gain", type="eng_float",
+                      default=eng_notation.num_to_str(16),
+                      help="HackRF LNA/IF gain, 0-40 dB in 8 dB steps. Safe to adjust "
+                      "freely. [default=%default]")
+
+    parser.add_option("-v", "--vga-gain", dest="vga_gain", type="eng_float",
+                      default=eng_notation.num_to_str(20),
+                      help="HackRF VGA/baseband gain, 0-62 dB in 2 dB steps. Safe to "
+                      "adjust freely. [default=%default]")
+
+    parser.add_option("", "--amp", dest="amp_enable", action="store_true",
+                      default=False,
+                      help="Enable HackRF front-end RF amp (+14 dB). OFF by default. "
+                      "CAUTION: drops safe max RX input from +10 dBm to -5 dBm.")
 
     parser.add_option("-s", "--samp-rate", dest="samp_rate", type="eng_float",
                       default=eng_notation.num_to_str(1000000),
@@ -126,14 +136,6 @@ if __name__ == '__main__':
 
     osmogroup.add_option("-w", "--bandwidth", dest="bandwidth", type="eng_float",
                       default="0", help="Set bandwidth [default=samp_rate]")
-
-    osmogroup.add_option("", "--bb-gain", dest="bb_gain", type="eng_float",
-                      default=eng_notation.num_to_str(20),
-                      help="Set baseband gain [default=%default]")
-
-    osmogroup.add_option("", "--if-gain", dest="if_gain", type="eng_float",
-                      default=eng_notation.num_to_str(20),
-                      help="Set intermediate freque gain [default=%default]")
 
     osmogroup.add_option("", "--ant", dest="antenna", type="string",
                       default="", help="Set antenna "
@@ -174,15 +176,20 @@ if __name__ == '__main__':
     elif options.freq:
         freq = options.freq
 
+    if options.amp_enable:
+        print("WARNING: HackRF RF amp enabled. Safe max RX input is now -5 dBm. "
+              "Do not use near a strong transmitter without an inline attenuator.",
+              file=sys.stderr)
+
     tb = gsm_capture(freq=freq,
-                       gain=options.gain,
+                       lna_gain=options.lna_gain,
+                       vga_gain=options.vga_gain,
+                       amp_enable=options.amp_enable,
                        freq_corr=options.freq_corr,
                        samp_rate=options.samp_rate,
                        output_filename=output_filename,
                        rec_length=options.rec_length,
                        bandwidth=options.bandwidth,
-                       bb_gain=options.bb_gain,
-                       if_gain=options.if_gain,
                        antenna=options.antenna,
                        device_args=options.device_args)
 
