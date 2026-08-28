@@ -1,3 +1,32 @@
+```
+sudo apt-get update && \
+sudo apt-get install -y \
+    cmake \
+    autoconf \
+    libtool \
+    pkg-config \
+    build-essential \
+    python-docutils \
+    libcppunit-dev \
+    swig \
+    doxygen \
+    liblog4cpp5-dev \
+    python-scipy \
+    python-gtk2 \
+    gnuradio-dev \
+    gr-osmosdr \
+    libosmocore-dev \
+    pybind11-dev \
+    python3-pygccxml \
+    python3-docutils
+
+cd ~
+git clone -b  https://github.com/charlottecroce/gr-gsm-hackrf
+cd gr-gsm-hackrf && mkdir build && cd build
+cmake .. && make -j$(nproc) && sudo make install && sudo ldconfig
+```
+
+
 The gr-gsm project 
 ==================
 The *gr-gsm* project is based on the *gsm-receiver* written by Piotr Krysik (also the main author of *gr-gsm*) for the *Airprobe* project.
