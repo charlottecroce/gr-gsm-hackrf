@@ -36,12 +36,48 @@ sudo usermod -aG plugdev $USER         # log out/in for it to take effect
 
 hackrf_info                            # should print hardeware info
 
-grgsm_scanner --args="hackrf=0" -b GSM850
-
-# use the frequency from the scanner
-grgsm_livemon_headless --args="hackrf=0" -f 947.4M -g 40
 
 ```
+
+usage
+
+```
+# Default gains (LNA 16, VGA 20, amp off)
+grgsm_scanner -b GSM900
+
+# Weak/distant cells: push LNA and VGA up, still no amp
+grgsm_scanner -b GSM900 -g 40 -v 40
+
+# Very weak signal, last resort, enable the front-end amp
+# (prints the -5 dBm warning to stderr)
+grgsm_scanner -b GSM900 -g 40 -v 40 --amp
+
+# Verbose cell info now needs the long flag (-v is vga-gain)
+grgsm_scanner -b GSM900 --verbose
+
+
+
+# Default gains
+grgsm_livemon_headless -f 947.4M
+
+# Turn the knobs (LNA 0-40 step 8, VGA 0-62 step 2)
+grgsm_livemon_headless -f 947.4M -g 32 -v 30
+
+# Amp on: note this is a value, not a flag
+grgsm_livemon_headless -f 947.4M -g 40 -v 40 --amp-enable 1
+
+Watch the decoded output in a second terminal with sudo tcpdump -i lo -nn port 4729, or Wireshark filtered on gsmtap
+
+# Default gains, 10-second capture
+grgsm_capture -f 947.4M -T 10 capture.cfile
+
+# Custom gains
+grgsm_capture -f 947.4M -g 24 -v 30 -T 10 capture.cfile
+
+# By ARFCN instead of frequency, amp on
+grgsm_capture -a 40 -g 40 -v 40 --amp -T 10 capture.cfile
+```
+
 
 
 The gr-gsm project 
