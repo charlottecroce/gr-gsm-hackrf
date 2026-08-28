@@ -24,6 +24,19 @@ cd ~
 git clone -b  https://github.com/charlottecroce/gr-gsm-hackrf
 cd gr-gsm-hackrf && mkdir build && cd build
 cmake .. && make -j$(nproc) && sudo make install && sudo ldconfig
+
+
+sudo apt install hackrf                # gets hackrf tools
+sudo usermod -aG plugdev $USER         # log out/in for it to take effect
+
+
+hackrf_info                            # should print hardeware info
+
+grgsm_scanner --args="hackrf=0" -b GSM850
+
+# use the frequency from the scanner
+grgsm_livemon_headless --args="hackrf=0" -f 947.4M -g 40
+
 ```
 
 
